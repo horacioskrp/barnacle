@@ -32,10 +32,10 @@ Barnacle inverse la logique : il vous montre l'état de votre coque Docker en te
 
 | | |
 |---|---|
-| 📊 **Tableau de bord interactif** | Jauges graphiques dans le terminal montrant l'espace disque occupé par les volumes, conteneurs, images et caches de build. |
-| ☑️ **Sélection sélective** | Naviguez avec les flèches, cochez avec la <kbd>Espace</kbd> pour choisir précisément quels éléments passer à la trappe. |
-| 📉 **Tri par taille** | Les plus gros consommateurs d'espace remontent automatiquement en tête de liste. |
-| ⏰ **Alertes d'ancienneté** | Barnacle repère et signale les ressources inutilisées depuis plus de X jours, pour ne rien laisser s'incruster trop longtemps. |
+| 📊 **Tableau de bord interactif** | Jauge graphique dans le terminal montrant l'espace récupérable, catégorie par catégorie (images suspendues, conteneurs arrêtés, volumes orphelins, cache de build). |
+| ☑️ **Sélection sélective** | Naviguez avec les flèches (ou `j`/`k`), cochez avec la <kbd>Espace</kbd> pour choisir précisément quoi nettoyer. |
+| 📐 **Taille réelle par catégorie** | Chaque ligne affiche la taille exacte et le nombre d'éléments concernés (ex : `Images suspendues 4.2 GB (7 éléments)`). |
+| ⏰ **Alertes d'ancienneté** | Barnacle signale les ressources inutilisées depuis plus de 7 jours avec `⚠ inutilisé depuis X jours`. |
 
 ---
 
@@ -51,33 +51,46 @@ Le tableau de bord s'ouvre directement dans votre terminal. Naviguez, sélection
 
 ---
 
-## 🎮 Utilisation
+## 📁 Structure du projet
+
+```
+barnacle/
+├── main.go     # Point d'entrée : connexion Docker + démarrage du programme
+├── docker.go   # Logique métier Docker (analyse d'espace + nettoyage ciblé)
+├── ui.go       # Interface terminal (Bubble Tea / Lipgloss)
+├── docs/       # Documentation détaillée
+├── go.mod
+└── go.sum
+```
+
+---
+
+## 📚 Documentation
+
+- [Guide d'utilisation](./docs/USAGE.md) — écrans, raccourcis clavier, prérequis.
+- [Architecture](./docs/ARCHITECTURE.md) — organisation du code et logique interne.
+- [Guide de contribution](./docs/CONTRIBUTING.md) — flux Git et checklist avant PR.
+
+---
+
+## 🎮 Raccourcis clavier
 
 | Touche | Action |
 |---|---|
-| `↑` / `↓` | Se déplacer dans la liste |
+| `↑` / `k` | Se déplacer vers le haut |
+| `↓` / `j` | Se déplacer vers le bas |
 | `Espace` | Cocher / décocher un élément |
-| `Entrée` | Confirmer et supprimer la sélection |
-| `s` | Trier par taille décroissante |
-| `q` | Quitter Barnacle |
+| `Entrée` | Passer à l'écran de confirmation |
+| `y` / `n` | Confirmer / annuler le nettoyage |
+| `q` / `Ctrl+C` | Quitter Barnacle |
+
+Détails complets dans [docs/USAGE.md](./docs/USAGE.md).
 
 ---
 
 ## 🤝 Contribuer
 
-Les contributions sont les bienvenues à bord ! Voici le flux à suivre :
-
-1. **Fork** le dépôt
-2. Créez votre branche de fonctionnalité à partir de `develop` :
-   ```bash
-   git checkout develop
-   git checkout -b feature/ma-nouvelle-fonctionnalite
-   ```
-3. Commitez vos changements avec des messages clairs
-4. Poussez votre branche vers votre fork
-5. Ouvrez une **Pull Request** vers la branche `develop` du dépôt principal
-
-Toute PR doit cibler `develop`, jamais `main` directement. 🧭
+Fork → branche depuis `develop` → Pull Request vers `develop`. Le détail complet du flux est dans [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md).
 
 ---
 
