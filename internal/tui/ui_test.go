@@ -1,4 +1,4 @@
-package main
+package tui
 
 import (
 	"errors"
@@ -6,6 +6,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"barnacle/internal/docker"
 )
 
 func key(t tea.KeyType) tea.KeyMsg {
@@ -16,17 +18,17 @@ func runeKey(r rune) tea.KeyMsg {
 	return tea.KeyMsg(tea.Key{Type: tea.KeyRunes, Runes: []rune{r}})
 }
 
-func testCategories() []Category {
-	return []Category{
-		{ID: CategoryDanglingImages, Label: "Images suspendues", Size: 100},
-		{ID: CategoryStoppedContainers, Label: "Conteneurs arrêtés", Size: 200},
-		{ID: CategoryOrphanVolumes, Label: "Volumes orphelins", Size: 300},
-		{ID: CategoryBuildCache, Label: "Cache de build obsolète", Size: 400},
+func testCategories() []docker.Category {
+	return []docker.Category{
+		{ID: docker.CategoryDanglingImages, Label: "Images suspendues", Size: 100},
+		{ID: docker.CategoryStoppedContainers, Label: "Conteneurs arrêtés", Size: 200},
+		{ID: docker.CategoryOrphanVolumes, Label: "Volumes orphelins", Size: 300},
+		{ID: docker.CategoryBuildCache, Label: "Cache de build obsolète", Size: 400},
 	}
 }
 
-func newBrowsingModel() model {
-	m := initialModel(nil)
+func newBrowsingModel() Model {
+	m := NewModel(nil)
 	m.state = stateBrowsing
 	m.categories = testCategories()
 	return m
@@ -89,7 +91,7 @@ func TestEnterWithoutSelectionStaysOnBrowsing(t *testing.T) {
 
 func TestEnterWithSelectionGoesToConfirming(t *testing.T) {
 	m := newBrowsingModel()
-	m.selected[CategoryDanglingImages] = true
+	m.selected[docker.CategoryDanglingImages] = true
 
 	m, cmd := update(m, key(tea.KeyEnter))
 	if m.state != stateConfirming {
@@ -103,7 +105,7 @@ func TestEnterWithSelectionGoesToConfirming(t *testing.T) {
 func TestConfirmingYesTriggersPrune(t *testing.T) {
 	m := newBrowsingModel()
 	m.state = stateConfirming
-	m.selected[CategoryDanglingImages] = true
+	m.selected[docker.CategoryDanglingImages] = true
 
 	m, cmd := update(m, runeKey('y'))
 	if m.state != statePruning {
@@ -117,7 +119,7 @@ func TestConfirmingYesTriggersPrune(t *testing.T) {
 func TestConfirmingEnterTriggersPrune(t *testing.T) {
 	m := newBrowsingModel()
 	m.state = stateConfirming
-	m.selected[CategoryDanglingImages] = true
+	m.selected[docker.CategoryDanglingImages] = true
 
 	m, cmd := update(m, key(tea.KeyEnter))
 	if m.state != statePruning {
@@ -131,7 +133,7 @@ func TestConfirmingEnterTriggersPrune(t *testing.T) {
 func TestConfirmingNoGoesBackToBrowsingAndKeepsSelection(t *testing.T) {
 	m := newBrowsingModel()
 	m.state = stateConfirming
-	m.selected[CategoryDanglingImages] = true
+	m.selected[docker.CategoryDanglingImages] = true
 
 	m, cmd := update(m, runeKey('n'))
 	if m.state != stateBrowsing {
@@ -140,7 +142,7 @@ func TestConfirmingNoGoesBackToBrowsingAndKeepsSelection(t *testing.T) {
 	if cmd != nil {
 		t.Fatalf("expected no command when cancelling")
 	}
-	if !m.selected[CategoryDanglingImages] {
+	if !m.selected[docker.CategoryDanglingImages] {
 		t.Fatalf("selection should be preserved when cancelling back to browsing")
 	}
 }
@@ -175,11 +177,11 @@ func TestQuitAllowedWhileBrowsing(t *testing.T) {
 }
 
 func TestUpdateHandlesDiskUsageMsg(t *testing.T) {
-	m := initialModel(nil)
+	m := NewModel(nil)
 	cats := testCategories()
 
 	updated, _ := m.Update(diskUsageMsg{categories: cats})
-	next := updated.(model)
+	next := updated.(Model)
 
 	if next.state != stateBrowsing {
 		t.Fatalf("state = %v, want stateBrowsing after disk usage loads", next.state)
@@ -190,10 +192,10 @@ func TestUpdateHandlesDiskUsageMsg(t *testing.T) {
 }
 
 func TestUpdateHandlesErrMsg(t *testing.T) {
-	m := initialModel(nil)
+	m := NewModel(nil)
 
 	updated, _ := m.Update(errMsg{err: errors.New("daemon unreachable")})
-	next := updated.(model)
+	next := updated.(Model)
 
 	if next.state != stateError {
 		t.Fatalf("state = %v, want stateError", next.state)
@@ -204,11 +206,11 @@ func TestUpdateHandlesErrMsg(t *testing.T) {
 }
 
 func TestUpdateHandlesPruneResultMsg(t *testing.T) {
-	m := initialModel(nil)
-	summary := PruneSummary{Results: []PruneResult{{Label: "x", SpaceReclaimed: 42}}}
+	m := NewModel(nil)
+	summary := docker.PruneSummary{Results: []docker.PruneResult{{Label: "x", SpaceReclaimed: 42}}}
 
 	updated, _ := m.Update(pruneResultMsg{summary: summary})
-	next := updated.(model)
+	next := updated.(Model)
 
 	if next.state != stateSummary {
 		t.Fatalf("state = %v, want stateSummary", next.state)
@@ -219,17 +221,17 @@ func TestUpdateHandlesPruneResultMsg(t *testing.T) {
 }
 
 func TestAnySelected(t *testing.T) {
-	m := initialModel(nil)
+	m := NewModel(nil)
 	if m.anySelected() {
 		t.Fatalf("anySelected() = true, want false on a fresh model")
 	}
 
-	m.selected[CategoryBuildCache] = false
+	m.selected[docker.CategoryBuildCache] = false
 	if m.anySelected() {
 		t.Fatalf("anySelected() = true, want false when the only entry is false")
 	}
 
-	m.selected[CategoryBuildCache] = true
+	m.selected[docker.CategoryBuildCache] = true
 	if !m.anySelected() {
 		t.Fatalf("anySelected() = false, want true")
 	}
@@ -242,8 +244,8 @@ func TestTotalAndSelectedSize(t *testing.T) {
 		t.Fatalf("totalSize() = %d, want 1000", got)
 	}
 
-	m.selected[CategoryDanglingImages] = true
-	m.selected[CategoryOrphanVolumes] = true
+	m.selected[docker.CategoryDanglingImages] = true
+	m.selected[docker.CategoryOrphanVolumes] = true
 
 	if got := m.selectedSize(); got != 400 {
 		t.Fatalf("selectedSize() = %d, want 400", got)
@@ -286,8 +288,8 @@ func TestFormatAge(t *testing.T) {
 }
 
 // update is a small test helper mirroring what Bubble Tea does internally:
-// it runs Update and type-asserts the result back to our concrete model.
-func update(m model, msg tea.Msg) (model, tea.Cmd) {
+// it runs Update and type-asserts the result back to our concrete Model.
+func update(m Model, msg tea.Msg) (Model, tea.Cmd) {
 	updated, cmd := m.Update(msg)
-	return updated.(model), cmd
+	return updated.(Model), cmd
 }
