@@ -55,10 +55,13 @@ Le tableau de bord s'ouvre directement dans votre terminal. Naviguez, sélection
 
 ```
 barnacle/
-├── main.go     # Point d'entrée : connexion Docker + démarrage du programme
-├── docker.go   # Logique métier Docker (analyse d'espace + nettoyage ciblé)
-├── ui.go       # Interface terminal (Bubble Tea / Lipgloss)
-├── docs/       # Documentation détaillée
+├── cmd/
+│   └── barnacle/     # Point d'entrée : connexion Docker + démarrage du programme
+│       └── main.go
+├── internal/
+│   ├── docker/       # Logique métier Docker (analyse d'espace + nettoyage ciblé)
+│   └── tui/          # Interface terminal (Bubble Tea / Lipgloss)
+├── docs/             # Documentation détaillée
 ├── go.mod
 └── go.sum
 ```

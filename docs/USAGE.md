@@ -11,8 +11,14 @@ docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock horacioskrp/bar
 Ou, en local depuis les sources :
 
 ```bash
-go build -o barnacle .
+go build -o barnacle ./cmd/barnacle
 ./barnacle
+```
+
+Ou directement, sans binaire intermédiaire :
+
+```bash
+go run ./cmd/barnacle
 ```
 
 ## Écrans

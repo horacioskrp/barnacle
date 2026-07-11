@@ -13,6 +13,7 @@ Les contributions sont les bienvenues à bord ! Voici le flux à suivre :
    ```bash
    go build ./...
    go vet ./...
+   go test ./...
    gofmt -l .
    ```
 5. Poussez votre branche vers votre fork.
@@ -20,8 +21,8 @@ Les contributions sont les bienvenues à bord ! Voici le flux à suivre :
 
 ## Où intervenir
 
-- [`docker.go`](../docker.go) : logique d'analyse et de nettoyage Docker.
-- [`ui.go`](../ui.go) : interface terminal (Bubble Tea / Lipgloss).
-- [`main.go`](../main.go) : point d'entrée du programme.
+- [`internal/docker/docker.go`](../internal/docker/docker.go) : logique d'analyse et de nettoyage Docker.
+- [`internal/tui/ui.go`](../internal/tui/ui.go) : interface terminal (Bubble Tea / Lipgloss).
+- [`cmd/barnacle/main.go`](../cmd/barnacle/main.go) : point d'entrée du programme.
 
 Voir [ARCHITECTURE.md](./ARCHITECTURE.md) pour comprendre l'organisation du code avant de contribuer.

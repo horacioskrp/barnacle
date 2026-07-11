@@ -1,4 +1,6 @@
-package main
+// Package tui implements Barnacle's terminal user interface using the
+// Bubble Tea Model-View-Update pattern.
+package tui
 
 import (
 	"context"
@@ -8,6 +10,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"barnacle/internal/docker"
 )
 
 // sessionState represents the current screen displayed by the TUI.
@@ -86,48 +90,49 @@ var (
 // Messages produced by asynchronous commands.
 
 type diskUsageMsg struct {
-	categories []Category
+	categories []docker.Category
 }
 
 type pruneResultMsg struct {
-	summary PruneSummary
+	summary docker.PruneSummary
 }
 
 type errMsg struct {
 	err error
 }
 
-// model is the single source of truth for Barnacle's TUI (MVU pattern).
-type model struct {
-	docker     *DockerClient
+// Model is the single source of truth for Barnacle's TUI (MVU pattern). It
+// implements the tea.Model interface.
+type Model struct {
+	docker     *docker.Client
 	state      sessionState
-	categories []Category
+	categories []docker.Category
 	cursor     int
-	selected   map[CategoryID]bool
-	summary    PruneSummary
+	selected   map[docker.CategoryID]bool
+	summary    docker.PruneSummary
 	err        error
 }
 
-// initialModel builds the starting state, ready to load disk usage.
-func initialModel(docker *DockerClient) model {
-	return model{
-		docker:   docker,
+// NewModel builds the starting state, ready to load disk usage.
+func NewModel(dockerClient *docker.Client) Model {
+	return Model{
+		docker:   dockerClient,
 		state:    stateLoading,
-		selected: make(map[CategoryID]bool),
+		selected: make(map[docker.CategoryID]bool),
 	}
 }
 
 // Init kicks off the initial disk-usage analysis.
-func (m model) Init() tea.Cmd {
+func (m Model) Init() tea.Cmd {
 	return loadDiskUsageCmd(m.docker)
 }
 
-func loadDiskUsageCmd(docker *DockerClient) tea.Cmd {
+func loadDiskUsageCmd(dockerClient *docker.Client) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
-		categories, err := docker.Analyze(ctx)
+		categories, err := dockerClient.Analyze(ctx)
 		if err != nil {
 			return errMsg{err: err}
 		}
@@ -135,8 +140,8 @@ func loadDiskUsageCmd(docker *DockerClient) tea.Cmd {
 	}
 }
 
-func runPruneCmd(docker *DockerClient, selected map[CategoryID]bool) tea.Cmd {
-	chosen := make(map[CategoryID]bool, len(selected))
+func runPruneCmd(dockerClient *docker.Client, selected map[docker.CategoryID]bool) tea.Cmd {
+	chosen := make(map[docker.CategoryID]bool, len(selected))
 	for id, ok := range selected {
 		chosen[id] = ok
 	}
@@ -145,13 +150,13 @@ func runPruneCmd(docker *DockerClient, selected map[CategoryID]bool) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 
-		summary := docker.Prune(ctx, chosen)
+		summary := dockerClient.Prune(ctx, chosen)
 		return pruneResultMsg{summary: summary}
 	}
 }
 
 // Update handles incoming messages and advances the model accordingly.
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case diskUsageMsg:
 		m.categories = msg.categories
@@ -175,7 +180,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
 	if (key == "ctrl+c" || key == "q") && m.state != statePruning {
@@ -196,7 +201,7 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) handleBrowsingKey(key string) (tea.Model, tea.Cmd) {
+func (m Model) handleBrowsingKey(key string) (tea.Model, tea.Cmd) {
 	switch key {
 	case "up", "k":
 		if m.cursor > 0 {
@@ -223,7 +228,7 @@ func (m model) handleBrowsingKey(key string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) handleConfirmingKey(key string) (tea.Model, tea.Cmd) {
+func (m Model) handleConfirmingKey(key string) (tea.Model, tea.Cmd) {
 	switch key {
 	case "y", "enter":
 		m.state = statePruning
@@ -236,7 +241,7 @@ func (m model) handleConfirmingKey(key string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) anySelected() bool {
+func (m Model) anySelected() bool {
 	for _, ok := range m.selected {
 		if ok {
 			return true
@@ -246,7 +251,7 @@ func (m model) anySelected() bool {
 }
 
 // View renders the current screen.
-func (m model) View() string {
+func (m Model) View() string {
 	switch m.state {
 	case stateLoading:
 		return m.viewLoading()
@@ -267,7 +272,7 @@ func header() string {
 	return titleStyle.Render("🐋 BARNACLE — nettoyage Docker")
 }
 
-func (m model) viewLoading() string {
+func (m Model) viewLoading() string {
 	var b strings.Builder
 	b.WriteString(header())
 	b.WriteString("\n")
@@ -276,7 +281,7 @@ func (m model) viewLoading() string {
 	return b.String()
 }
 
-func (m model) viewPruning() string {
+func (m Model) viewPruning() string {
 	var b strings.Builder
 	b.WriteString(header())
 	b.WriteString("\n")
@@ -285,7 +290,7 @@ func (m model) viewPruning() string {
 	return b.String()
 }
 
-func (m model) viewError() string {
+func (m Model) viewError() string {
 	var b strings.Builder
 	b.WriteString(header())
 	b.WriteString("\n")
@@ -296,7 +301,7 @@ func (m model) viewError() string {
 	return b.String()
 }
 
-func (m model) totalSize() int64 {
+func (m Model) totalSize() int64 {
 	var total int64
 	for _, cat := range m.categories {
 		total += cat.Size
@@ -304,7 +309,7 @@ func (m model) totalSize() int64 {
 	return total
 }
 
-func (m model) selectedSize() int64 {
+func (m Model) selectedSize() int64 {
 	var total int64
 	for _, cat := range m.categories {
 		if m.selected[cat.ID] {
@@ -314,7 +319,7 @@ func (m model) selectedSize() int64 {
 	return total
 }
 
-func (m model) viewBrowsing() string {
+func (m Model) viewBrowsing() string {
 	var b strings.Builder
 	b.WriteString(header())
 	b.WriteString("\n")
@@ -338,7 +343,7 @@ func (m model) viewBrowsing() string {
 }
 
 func renderGauge(selected, total int64) string {
-	label := fmt.Sprintf("Espace récupérable : %s / %s sélectionnés", FormatBytes(selected), FormatBytes(total))
+	label := fmt.Sprintf("Espace récupérable : %s / %s sélectionnés", docker.FormatBytes(selected), docker.FormatBytes(total))
 
 	filled := 0
 	if total > 0 {
@@ -355,7 +360,7 @@ func renderGauge(selected, total int64) string {
 	return fmt.Sprintf("%s\n[%s]", label, bar)
 }
 
-func renderCategoryRow(cat Category, isCursor, isSelected bool) string {
+func renderCategoryRow(cat docker.Category, isCursor, isSelected bool) string {
 	cursor := "  "
 	if isCursor {
 		cursor = cursorStyle.Render("➤ ")
@@ -366,7 +371,7 @@ func renderCategoryRow(cat Category, isCursor, isSelected bool) string {
 		checkbox = selectedStyle.Render("[x]")
 	}
 
-	label := fmt.Sprintf("%-26s %10s", cat.Label, FormatBytes(cat.Size))
+	label := fmt.Sprintf("%-26s %10s", cat.Label, docker.FormatBytes(cat.Size))
 	if cat.Count > 0 {
 		label += fmt.Sprintf("  (%d élément%s)", cat.Count, plural(cat.Count))
 	}
@@ -384,7 +389,7 @@ func renderCategoryRow(cat Category, isCursor, isSelected bool) string {
 	return row
 }
 
-func (m model) viewConfirm() string {
+func (m Model) viewConfirm() string {
 	var b strings.Builder
 	b.WriteString(header())
 	b.WriteString("\n")
@@ -399,11 +404,11 @@ func (m model) viewConfirm() string {
 			continue
 		}
 		total += cat.Size
-		if cat.ID == CategoryOrphanVolumes {
+		if cat.ID == docker.CategoryOrphanVolumes {
 			hasVolumes = true
 		}
 
-		line := fmt.Sprintf("  • %-26s %10s", cat.Label, FormatBytes(cat.Size))
+		line := fmt.Sprintf("  • %-26s %10s", cat.Label, docker.FormatBytes(cat.Size))
 		if cat.Count > 0 {
 			line += fmt.Sprintf("  (%d élément%s)", cat.Count, plural(cat.Count))
 		}
@@ -412,7 +417,7 @@ func (m model) viewConfirm() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(fmt.Sprintf("Espace total qui sera libéré : %s", FormatBytes(total)))
+	b.WriteString(fmt.Sprintf("Espace total qui sera libéré : %s", docker.FormatBytes(total)))
 	b.WriteString("\n\n")
 
 	if hasVolumes {
@@ -448,7 +453,7 @@ func formatAge(d time.Duration) string {
 	return fmt.Sprintf("%d jours", days)
 }
 
-func (m model) viewSummary() string {
+func (m Model) viewSummary() string {
 	var b strings.Builder
 	b.WriteString(header())
 	b.WriteString("\n")
@@ -459,13 +464,13 @@ func (m model) viewSummary() string {
 		if res.Err != nil {
 			b.WriteString(errorStyle.Render(fmt.Sprintf("✗ %s : %v", res.Label, res.Err)))
 		} else {
-			b.WriteString(fmt.Sprintf("✓ %-26s %s libérés", res.Label, FormatBytes(int64(res.SpaceReclaimed))))
+			b.WriteString(fmt.Sprintf("✓ %-26s %s libérés", res.Label, docker.FormatBytes(int64(res.SpaceReclaimed))))
 		}
 		b.WriteString("\n")
 	}
 
 	b.WriteString("\n")
-	b.WriteString(successStyle.Render(fmt.Sprintf("Total libéré : %s", FormatBytes(int64(m.summary.TotalReclaimed())))))
+	b.WriteString(successStyle.Render(fmt.Sprintf("Total libéré : %s", docker.FormatBytes(int64(m.summary.TotalReclaimed())))))
 	b.WriteString("\n")
 	b.WriteString(helpStyle.Render("entrée/q : quitter"))
 	b.WriteString("\n")

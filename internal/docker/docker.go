@@ -1,4 +1,6 @@
-package main
+// Package docker implements Barnacle's Docker Engine interaction: analyzing
+// reclaimable disk usage and running targeted prune operations.
+package docker
 
 import (
 	"context"
@@ -60,15 +62,15 @@ func (s PruneSummary) TotalReclaimed() uint64 {
 	return total
 }
 
-// DockerClient wraps the Docker Engine API client used by Barnacle.
-type DockerClient struct {
+// Client wraps the Docker Engine API client used by Barnacle.
+type Client struct {
 	cli *client.Client
 }
 
-// NewDockerClient connects to the Docker daemon using the standard
-// environment configuration (DOCKER_HOST, DOCKER_CERT_PATH, TLS...),
-// which defaults to the local unix socket /var/run/docker.sock.
-func NewDockerClient() (*DockerClient, error) {
+// NewClient connects to the Docker daemon using the standard environment
+// configuration (DOCKER_HOST, DOCKER_CERT_PATH, TLS...), which defaults to
+// the local unix socket /var/run/docker.sock.
+func NewClient() (*Client, error) {
 	cli, err := client.NewClientWithOpts(
 		client.FromEnv,
 		client.WithAPIVersionNegotiation(),
@@ -84,18 +86,18 @@ func NewDockerClient() (*DockerClient, error) {
 		return nil, fmt.Errorf("le démon Docker ne répond pas (socket monté ? droits suffisants ?): %w", err)
 	}
 
-	return &DockerClient{cli: cli}, nil
+	return &Client{cli: cli}, nil
 }
 
 // Close releases the underlying HTTP client resources.
-func (d *DockerClient) Close() error {
+func (d *Client) Close() error {
 	return d.cli.Close()
 }
 
 // Analyze fetches disk usage from the daemon and buckets it into the four
 // categories Barnacle knows how to clean, each annotated with a staleness
 // flag when its oldest unused item is older than staleThreshold.
-func (d *DockerClient) Analyze(ctx context.Context) ([]Category, error) {
+func (d *Client) Analyze(ctx context.Context) ([]Category, error) {
 	usage, err := d.cli.DiskUsage(ctx, client.DiskUsageOptions{
 		Containers: true,
 		Images:     true,
@@ -231,7 +233,7 @@ func finalizeAge(cat *Category, oldest time.Time) {
 // Prune removes the resources for every category whose ID maps to true in
 // selected. It keeps going even if one step fails, collecting every error
 // into the returned summary instead of aborting the whole run.
-func (d *DockerClient) Prune(ctx context.Context, selected map[CategoryID]bool) PruneSummary {
+func (d *Client) Prune(ctx context.Context, selected map[CategoryID]bool) PruneSummary {
 	var summary PruneSummary
 
 	if selected[CategoryStoppedContainers] {
@@ -250,7 +252,7 @@ func (d *DockerClient) Prune(ctx context.Context, selected map[CategoryID]bool) 
 	return summary
 }
 
-func (d *DockerClient) pruneContainers(ctx context.Context) PruneResult {
+func (d *Client) pruneContainers(ctx context.Context) PruneResult {
 	res := PruneResult{Label: "Conteneurs arrêtés"}
 	report, err := d.cli.ContainerPrune(ctx, client.ContainerPruneOptions{})
 	if err != nil {
@@ -261,7 +263,7 @@ func (d *DockerClient) pruneContainers(ctx context.Context) PruneResult {
 	return res
 }
 
-func (d *DockerClient) pruneImages(ctx context.Context) PruneResult {
+func (d *Client) pruneImages(ctx context.Context) PruneResult {
 	res := PruneResult{Label: "Images suspendues"}
 	filters := client.Filters{}.Add("dangling", "true")
 	report, err := d.cli.ImagePrune(ctx, client.ImagePruneOptions{Filters: filters})
@@ -273,7 +275,7 @@ func (d *DockerClient) pruneImages(ctx context.Context) PruneResult {
 	return res
 }
 
-func (d *DockerClient) pruneVolumes(ctx context.Context) PruneResult {
+func (d *Client) pruneVolumes(ctx context.Context) PruneResult {
 	res := PruneResult{Label: "Volumes orphelins"}
 	report, err := d.cli.VolumePrune(ctx, client.VolumePruneOptions{All: true})
 	if err != nil {
@@ -284,7 +286,7 @@ func (d *DockerClient) pruneVolumes(ctx context.Context) PruneResult {
 	return res
 }
 
-func (d *DockerClient) pruneBuildCache(ctx context.Context) PruneResult {
+func (d *Client) pruneBuildCache(ctx context.Context) PruneResult {
 	res := PruneResult{Label: "Cache de build obsolète"}
 	report, err := d.cli.BuildCachePrune(ctx, client.BuildCachePruneOptions{All: true})
 	if err != nil {
